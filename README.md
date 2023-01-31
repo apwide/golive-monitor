@@ -13,5 +13,5 @@ See the `help_debug` function for help configuration this script.
 To run/test locally:
 
 ```shell
-export $(cat .env.server .env.server.local | grep -v "^#" | xargs) && ./golive-monitor.sh 
+export $(cat .env.server .env.server.local | grep -v "^#" | xargs) && ./golive-monitor.sh
 ```

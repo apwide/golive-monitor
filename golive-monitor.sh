@@ -13,7 +13,7 @@
 auth_header="Authorization: bearer ${API_KEY}"
 
 function help_debug {
-    cat << END
+    cat <<END
 To function properly this script requires some parameters passed as environment variables
 
 *Cloud*
@@ -53,18 +53,18 @@ END
 
 function exit_with_message {
     help_debug
-    >&2 echo -e "\nERROR: $1\n"
+    echo >&2 -e "\nERROR: $1\n"
     exit 1
 }
 
 # Requirements
-which jq  > /dev/null 2>&1 || exit_with_message "jq is missing"
-which curl > /dev/null 2>&1 || exit_with_message "curl is missing"
-which pidof > /dev/null 2>&1 || exit_with_message "pidof is missing"
+which jq >/dev/null 2>&1 || exit_with_message "jq is missing"
+which curl >/dev/null 2>&1 || exit_with_message "curl is missing"
+which pidof >/dev/null 2>&1 || exit_with_message "pidof is missing"
 
 # Only one of me can run
 me=$(basename "${BASH_SOURCE[0]}")
-pidof -o %PPID -x "${me}" > /dev/null 2>&1 && exit_with_message "Already running... exiting."
+pidof -o %PPID -x "${me}" >/dev/null 2>&1 && exit_with_message "Already running... exiting."
 
 if [ "$API_KEY" = "" ] && [ "${JIRA_USERNAME}" == "" ]; then
     exit_with_message "API_KEY is missing"
@@ -82,19 +82,21 @@ if [ "$JIRA_USERNAME" != "" ] && [ "${JIRA_PASSWORD}" != "" ]; then
     auth_header="Authorization: Basic $(echo -n "${JIRA_USERNAME}:${JIRA_PASSWORD}" | base64)"
 fi
 
-
 function check_if_up {
     local url=$1
     typeset -i response_code
     response_code=$(curl \
-                    -sL \
-                    --connect-timeout 5 \
-                    -w "%{http_code}\\n" \
-                    "${url}" \
-                    -o /dev/null\
-                    )
-    if [ $response_code -lt 400 ]
-    then
+        -sL \
+        --connect-timeout 5 \
+        -w "%{http_code}\\n" \
+        "${url}" \
+        -o /dev/null \
+        )
+
+    if [ $response_code = 0 ]; then
+        # domain not found
+        echo $STATUS_DOWN
+    elif [ $response_code -lt 400 ]; then
         echo $STATUS_UP
     else
         echo $STATUS_DOWN
@@ -111,23 +113,24 @@ function update_status {
         echo "not done (\$READ_ONLY is true)"
     else
 
-      response_code=$(curl -sL \
-          -X PUT \
-          -w "%{http_code}\\n" \
-          -H "${auth_header}" \
-          -H "Content-type: application/json" \
-          -H "Accept: application/json" \
-          -d "{ \"name\": \"$new_status\" }" \
-          -o /dev/null \
-          "${BASE_URL}/status-change?environmentId=${env_id}" \
-          )
-      if [ $response_code = 304 ]; then
-          echo "change was not needed (?)"
-      elif [ $response_code = 200 ]; then
-          echo "done"
-      else
-          echo "change was refused ($response_code)."
-      fi
+        response_code=$(
+            curl -sL \
+                -X PUT \
+                -w "%{http_code}\\n" \
+                -H "${auth_header}" \
+                -H "Content-type: application/json" \
+                -H "Accept: application/json" \
+                -d "{ \"name\": \"$new_status\" }" \
+                -o /dev/null \
+                "${BASE_URL}/status-change?environmentId=${env_id}"
+        )
+        if [ $response_code = 304 ]; then
+            echo "change was not needed (?)"
+        elif [ $response_code = 200 ]; then
+            echo "done"
+        else
+            echo "change was refused ($response_code)."
+        fi
     fi
 }
 
@@ -138,30 +141,30 @@ fi
 
 # Retrieve all environments
 envs="$(mktemp)"
-curl -sL -H "${auth_header}" "${BASE_URL}/environments/search/paginated?${GOLIVE_QUERY}&_expand=${expand}" > "${envs}"
+curl -sL -H "${auth_header}" "${BASE_URL}/environments/search/paginated?${GOLIVE_QUERY}&_expand=${expand}" >"${envs}"
 
-if [ "$(cat "$envs")" = "" ];
-then
+if [ "$(cat "$envs")" = "" ]; then
     rm "$envs"
     exit_with_message "The provided host and/or key does not work properly. Please check your entries."
 fi
 
 if [ "${READ_ONLY}" = "true" ]; then
-  echo "IMPORTANT: Running in read-only mode. Statuses will not be updated in Golive."
+    echo "IMPORTANT: Running in read-only mode. Statuses will not be updated in Golive."
 fi
 
 typeset -i count
 count=$(cat "$envs" | jq '.environments | length')
-echo "There are ${count} environments in Golive"
+if [ $count -gt 1 ]; then
+    echo "There are ${count} environments in Golive"
+fi
 
-((count=count-1))
+((count = count - 1))
 
 i=0
-until [ $i -gt $count ]
-do
+until [ $i -gt $count ]; do
     id="$(cat "$envs" | jq --argjson i $i '.environments[$i].id')"
     name="$(cat "$envs" | jq --argjson i $i '.environments[$i].name')"
-    if [ "$URL_TO_CHECK" = "" ];then
+    if [ "$URL_TO_CHECK" = "" ]; then
         url="$(cat "$envs" | jq -r --argjson i $i '.environments[$i].url')"
     else
         url="$(cat "$envs" | jq -r --argjson i $i --arg attr $URL_TO_CHECK '.environments[$i].attributes[$attr]')"
@@ -176,7 +179,7 @@ do
             update_status "$id" "$new_status"
         fi
     fi
-    ((i=i+1))
+    ((i = i + 1))
 done
 
 rm -r "$envs"

@@ -60,11 +60,13 @@ function exit_with_message {
 # Requirements
 which jq >/dev/null 2>&1 || exit_with_message "jq is missing"
 which curl >/dev/null 2>&1 || exit_with_message "curl is missing"
-which pidof >/dev/null 2>&1 || exit_with_message "pidof is missing"
 
 # Only one of me can run
-me=$(basename "${BASH_SOURCE[0]}")
-pidof -o %PPID -x "${me}" >/dev/null 2>&1 && exit_with_message "Already running... exiting."
+if ps ax | grep "$0" | grep -v $$ | grep bash | grep -v grep
+then
+    echo "Already running... exiting."
+    exit 1
+fi
 
 if [ "$API_KEY" = "" ] && [ "${JIRA_USERNAME}" == "" ]; then
     exit_with_message "API_KEY is missing"

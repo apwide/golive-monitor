@@ -27,3 +27,11 @@ jobs:
           context: .
           push: true
           tags: apwide/golive-monitor:latest,apwide/golive-monitor:${{ env.today }}-${{ steps.commit.outputs.short }}
+      - name: Push new deployment to Golive
+        uses: fjogeleit/http-request-action@v1
+        with:
+            url: 'https://golive.apwide.net/api/deployment?environmentId=61'
+            method: 'PUT'
+            bearerToken: ${{ secrets.GOLIVE_TOKEN }}
+            customHeaders: '{"Content-Type": "application/json"}'
+            data: '{ "versionName": "${{ env.today }}-${{ steps.commit.outputs.short }}", "description": "Github Workflow automated release" }'

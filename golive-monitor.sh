@@ -60,25 +60,27 @@ function exit_with_message {
 # Requirements
 which jq >/dev/null 2>&1 || exit_with_message "jq is missing"
 which curl >/dev/null 2>&1 || exit_with_message "curl is missing"
-which pidof >/dev/null 2>&1 || exit_with_message "pidof is missing"
 
 # Only one of me can run
 me=$(basename "${BASH_SOURCE[0]}")
-pidof -o %PPID -x "${me}" >/dev/null 2>&1 && exit_with_message "Already running... exiting."
+if command ps ax | grep "${me}" | grep -v $$ | grep -v grep > /dev/null; then
+    echo "Already running... exiting"
+    exit
+fi
 
-if [ "$API_KEY" = "" ] && [ "${JIRA_USERNAME}" == "" ]; then
+if [ "${API_KEY}" = "" ] && [ "${JIRA_USERNAME}" = "" ]; then
     exit_with_message "API_KEY is missing"
 fi
 
-if [ "$BASE_URL" = "" ]; then
+if [ "${BASE_URL}" = "" ]; then
     exit_with_message "BASE_URL is missing, should be \n - 'https://golive.apwide.net/api' for cloud\n - 'https://my.jira.local/jira/rest/apwide/tem/1.1' for server/DC"
 fi
 
-if [ "$JIRA_USERNAME" != "" ] && [ "${JIRA_PASSWORD}" = '' ]; then
+if [ "${JIRA_USERNAME}" != "" ] && [ "${JIRA_PASSWORD}" = '' ]; then
     exit_with_message "Missing JIRA_PASSWORD for user ${JIRA_USERNAME}."
 fi
 
-if [ "$JIRA_USERNAME" != "" ] && [ "${JIRA_PASSWORD}" != "" ]; then
+if [ "${JIRA_USERNAME}" != "" ] && [ "${JIRA_PASSWORD}" != "" ]; then
     auth_header="Authorization: Basic $(echo -n "${JIRA_USERNAME}:${JIRA_PASSWORD}" | base64)"
 fi
 
@@ -93,7 +95,7 @@ function check_if_up {
         -o /dev/null \
         )
 
-    if [ $response_code = 0 ]; then
+    if [ $response_code -eq 0 ]; then
         # domain not found
         echo $STATUS_DOWN
     elif [ $response_code -lt 400 ]; then
@@ -156,6 +158,10 @@ typeset -i count
 count=$(cat "$envs" | jq '.environments | length')
 if [ $count -gt 1 ]; then
     echo "There are ${count} environments in Golive"
+fi
+
+if [ $count -eq 0 ]; then
+    echo "Nothing to do, there are no environments."
 fi
 
 ((count = count - 1))

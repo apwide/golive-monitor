@@ -11,6 +11,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - id: commit
+        uses: pr-mpt/actions-commit-hash@v2
+      - id: date
+        run: |
+            echo "today=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -21,4 +26,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: apwide/golive-monitor:latest
+          tags: apwide/golive-monitor:latest,apwide/golive-monitor:${{ env.today }}-${{ steps.commit.outputs.short }}

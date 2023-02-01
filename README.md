@@ -6,7 +6,7 @@ This script performs the following operations:
 
 - fetches environments from [Golive](https://marketplace.atlassian.com/apps/1212239/?tab=overview&hosting=cloud) (server or cloud)
 - tests the availability of each environment (using `url` or using the environment value associated with an attribute name provided)
-- perform status-change of each environment that has changed status (use READ_ONLY=true to avoid)
+- perform status-change of each environment that has changed status (use DRY_RUN=true to avoid)
 
 See the `help_debug` function for help configuration this script.
 

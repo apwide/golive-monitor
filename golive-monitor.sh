@@ -9,6 +9,7 @@
 : "${JIRA_USERNAME:=}"
 : "${JIRA_PASSWORD:=}"
 : "${READ_ONLY:=}"
+: "${IGNORED_STATUSES:=}"
 
 auth_header="Authorization: bearer ${API_KEY}"
 
@@ -36,6 +37,8 @@ The following are optional and their value depends on the configuration in Goliv
                  e.g. applicationName=
 - URL_TO_CHECK - be default, the environment 'url' value is tested, you can override this by adding an
                  environment attribute and pass it to this script
+- IGNORED_STATUSES - comma separated list of statuses. If an environment is in that status, the check will
+                     not be performed. Values are not trimmed so be careful (ex. "Maintenance,None")
 
 *Common pitfalls*
 
@@ -63,7 +66,8 @@ which curl >/dev/null 2>&1 || exit_with_message "curl is missing"
 
 # Only one of me can run
 me=$(basename "${BASH_SOURCE[0]}")
-if command ps ax | grep "${me}" | grep -v $$ | grep -v grep > /dev/null; then
+
+if command ps ax | grep "${me}" | grep -v $$ | grep -v grep >/dev/null; then
     echo "Already running... exiting"
     exit
 fi
@@ -85,15 +89,17 @@ if [ "${JIRA_USERNAME}" != "" ] && [ "${JIRA_PASSWORD}" != "" ]; then
 fi
 
 function check_if_up {
-    local url=$1
+    local url=$1$
+    local response_code
     typeset -i response_code
-    response_code=$(curl \
-        -sL \
-        --connect-timeout 5 \
-        -w "%{http_code}\\n" \
-        "${url}" \
-        -o /dev/null \
-        )
+    response_code=$(
+        curl \
+            -sL \
+            --connect-timeout 5 \
+            -w "%{http_code}\\n" \
+            "${url}" \
+            -o /dev/null
+    )
 
     if [ $response_code -eq 0 ]; then
         # domain not found
@@ -109,10 +115,12 @@ function update_status {
     local env_id=$1
     local new_status=$2
     local response_code
+    typeset -i response_code
+
     echo -n "Updating envId ${env_id} to ${new_status}... "
 
-    if [ "${READ_ONLY}" = "true" ]; then
-        echo "not done (\$READ_ONLY is true)"
+    if [ "${DRY_RUN}" = "true" ]; then
+        echo "not done (DRY_RUN is true)"
     else
 
         response_code=$(
@@ -136,6 +144,23 @@ function update_status {
     fi
 }
 
+function is_ignored_status {
+    if [ "${IGNORED_STATUSES}" = "" ]; then
+        return 1
+    else
+        local status=$1
+        local list
+        local i
+        list=$(echo $IGNORED_STATUSES | tr ',' ' ')
+        for i in $list; do
+            if [ "$i" = "$status" ]; then
+                return 0
+            fi
+        done
+        return 1
+    fi
+}
+
 expand=false
 if [ "$URL_TO_CHECK" != "" ]; then
     expand=true
@@ -150,7 +175,7 @@ if [ "$(cat "$envs")" = "" ]; then
     exit_with_message "The provided host and/or key does not work properly. Please check your entries."
 fi
 
-if [ "${READ_ONLY}" = "true" ]; then
+if [ "${DRY_RUN}" = "true" ]; then
     echo "IMPORTANT: Running in read-only mode. Statuses will not be updated in Golive."
 fi
 
@@ -166,26 +191,35 @@ fi
 
 ((count = count - 1))
 
-i=0
-until [ $i -gt $count ]; do
-    id="$(cat "$envs" | jq --argjson i $i '.environments[$i].id')"
-    name="$(cat "$envs" | jq --argjson i $i '.environments[$i].name')"
-    if [ "$URL_TO_CHECK" = "" ]; then
-        url="$(cat "$envs" | jq -r --argjson i $i '.environments[$i].url')"
-    else
-        url="$(cat "$envs" | jq -r --argjson i $i --arg attr $URL_TO_CHECK '.environments[$i].attributes[$attr]')"
+index=0
+until [ $index -gt $count ]; do
+    id="$(cat "$envs" | jq --argjson index $index '.environments[$index].id')"
+    name="$(cat "$envs" | jq --argjson index $index '.environments[$index].name')"
+    current_status="$(cat "$envs" | jq -r --argjson index $index '.environments[$index].status.name')"
+
+    if [ "${current_status}" = "null" ]; then
+        current_status=None
     fi
-    if [ "$url" = '' ] || [ "$url" = 'null' ]; then
-        echo "$name has no url"
+
+    if is_ignored_status "$current_status"; then
+        echo "Ignoring $name as its status is ${current_status}"
     else
-        echo "Testing $name on $url"
-        new_status=$(check_if_up "$url")
-        current_status="$(cat "$envs" | jq -r --argjson i $i '.environments[$i].status.name')"
-        if [ "$current_status" != "$new_status" ]; then
-            update_status "$id" "$new_status"
+        if [ "$URL_TO_CHECK" = "" ]; then
+            url="$(cat "$envs" | jq -r --argjson index $index '.environments[$index].url')"
+        else
+            url="$(cat "$envs" | jq -r --argjson index $index --arg attr $URL_TO_CHECK '.environments[$index].attributes[$attr]')"
+        fi
+        if [ "$url" = '' ] || [ "$url" = 'null' ]; then
+            echo "$name has no url"
+        else
+            echo "Testing $name on $url"
+            new_status=$(check_if_up "$url")
+            if [ "$current_status" != "$new_status" ]; then
+                update_status "$id" "$new_status"
+            fi
         fi
     fi
-    ((i = i + 1))
+    ((index = index + 1))
 done
 
 rm -r "$envs"

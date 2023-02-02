@@ -4,11 +4,9 @@ RUN apk add jq curl dumb-init bash
 RUN mkdir "/app"
 WORKDIR /app
 
-COPY golive-monitor.sh .
-COPY cron.sh .
+COPY *.sh ./
 
-RUN chmod +x golive-monitor.sh cron.sh
+RUN chmod +x golive-monitor.sh cron.sh start.sh
 
-RUN crontab -l | { cat; echo "* * * * * bash /app/cron.sh"; } | crontab -
 
-CMD ["dumb-init", "crond",  "-f" ]
+CMD ["dumb-init", "/app/start.sh" ]

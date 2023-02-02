@@ -67,9 +67,17 @@ which curl >/dev/null 2>&1 || exit_with_message "curl is missing"
 # Only one of me can run
 me=$(basename "${BASH_SOURCE[0]}")
 
-if command ps ax | grep "${me}" | grep -v $$ | grep -v grep >/dev/null; then
-    echo "Already running... exiting"
-    exit
+if which pidof > /dev/null 2>&1; then
+    if pidof -o %PPID -x "${me}" >/dev/null 2>&1; then
+        echo "Already running... exiting."
+        exit
+    fi
+else
+    # this fails in docker on MacOS... hence the use of pidof if available
+    if command ps ax | grep "${me}" | grep -v $$ | grep -v grep >/dev/null; then
+        echo "Already running... exiting"
+        exit
+    fi
 fi
 
 if [ "${API_KEY}" = "" ] && [ "${JIRA_USERNAME}" = "" ]; then
@@ -89,7 +97,7 @@ if [ "${JIRA_USERNAME}" != "" ] && [ "${JIRA_PASSWORD}" != "" ]; then
 fi
 
 function check_if_up {
-    local url=$1$
+    local url=$1
     local response_code
     typeset -i response_code
     response_code=$(

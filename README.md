@@ -2,9 +2,9 @@
 
 This script performs the following operations:
 
-- fetches environments from [Golive](https://marketplace.atlassian.com/apps/1212239/?tab=overview&hosting=cloud) (server or cloud)
-- tests the availability of each environment (using `url` or using the environment value associated with an attribute name provided)
-- perform status-change of each environment that has changed status (use DRY_RUN=true to avoid)
+-   fetches environments from [Golive](https://marketplace.atlassian.com/apps/1212239/?tab=overview&hosting=cloud) (server or cloud)
+-   tests the availability of each environment (using `url` or using the environment value associated with an attribute name provided)
+-   perform status-change of each environment that has changed status (use DRY_RUN=true to avoid)
 
 See the `help_debug` function for help configuration this script.
 
@@ -12,8 +12,8 @@ See the `help_debug` function for help configuration this script.
 
 We provide 2 ways of using this script:
 
-- as a bash script
-- as a docker image
+-   as a bash script
+-   as a docker image
 
 ## Script
 
@@ -37,7 +37,13 @@ $ docker build -t apwide/golive-monitor .
 To run it once:
 
 ```shell
-$ docker run -ti -env-file=.env.server.local apwide/golive-monitor ./golive-monitor.sh
+$ docker run -ti --env-file=.env.server.local apwide/golive-monitor ./golive-monitor.sh
+```
+
+OR just set `PERIOD=0` and run without the command
+
+```shell
+$ docker run -ti --env-file=.env.server.local apwide/golive-monitor
 ```
 
 ### Let it run by defining the period
@@ -52,17 +58,17 @@ In this configuration, if the previous execution is still running, the new run i
 
 ## Configuration
 
-- JIRA_USERNAME (only server/DC)
-- JIRA_PASSWORD (only server/DC)
-- BASE_URL (only server/DC)
-- API_KEY (only cloud)
-- STATUS_UP (default: 'Up') -- status value in golive for an environment to be seen as UP
-- STATUS_DOWN (default: 'Down) -- status value in golive for an environment to be seen as DOWN
-- GOLIVE_QUERY (optional) -- query string to filter the environment search
-- URL_TO_CHECK (optional) -- attribute value to look for a test url, if not provided the environment url is used
-- IGNORED_STATUSES (optional) -- comma separated list of status. If the environment has this status, it will not be checked
-- DRY_RUN (optional) -- set to `true` to not update the status after the test
-- PERIOD (default to 1) -- amount of minutes between to run when using the docker image as cron, cannot be smaller than one
+-   JIRA_USERNAME (only server/DC)
+-   JIRA_PASSWORD (only server/DC)
+-   BASE_URL (only server/DC)
+-   API_KEY (only cloud)
+-   STATUS_UP (default: 'Up') -- status value in golive for an environment to be seen as UP
+-   STATUS_DOWN (default: 'Down) -- status value in golive for an environment to be seen as DOWN
+-   GOLIVE_QUERY (optional) -- query string to filter the environment search
+-   URL_TO_CHECK (optional) -- attribute value to look for a test url, if not provided the environment url is used
+-   IGNORED_STATUSES (optional) -- comma separated list of status. If the environment has this status, it will not be checked
+-   DRY_RUN (optional) -- set to `true` to not update the status after the test
+-   PERIOD (default to 1) -- amount of minutes between to run when using the docker image as cron, cannot be smaller than one
 
 ### Examples
 
@@ -99,4 +105,3 @@ IGNORED_STATUSES=Maintenance,None
 URL_TO_CHECK=heartbeat
 DRY_RUN=true
 ```
-

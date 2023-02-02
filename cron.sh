@@ -1,10 +1,11 @@
 #!/bin/bash
+
 : "${PERIOD:=}"
+
 last_execution="./.last-execution"
 date "+%Y-%m-%dT%H-%M-%S"
 
-if [ "${PERIOD}" = "" ]; then
-    # default to 1 minute
+if [ "${PERIOD}" = "" ] || [ "${PERIOD}" = "0" ]; then
     bash /app/golive-monitor.sh
 else
     now=$(date +"%s")

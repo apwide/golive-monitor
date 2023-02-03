@@ -46,12 +46,15 @@ OR just set `PERIOD=0` and run without the command
 $ docker run -ti --env-file=.env.server.local apwide/golive-monitor
 ```
 
+When testing this image localy, remember that running container usualy cannot access `localhost`, make `BASE_URL` points to an IP or a resolvable machine name.
+
+
 ### Let it run by defining the period
 
 Define a value in minutes for `PERIOD` environment variable.
 
 ```shell
-$ docker run -ti -env-file=.env.server.local apwide/golive-monitor
+$ docker run -ti --env-file=.env.server.local apwide/golive-monitor
 ```
 
 In this configuration, if the previous execution is still running, the new run is postponed until the next minute.

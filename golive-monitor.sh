@@ -74,26 +74,26 @@ if which pidof > /dev/null 2>&1; then
     fi
 else
     # this fails in docker on MacOS... hence the use of pidof if available
-    if command ps ax | grep "${me}" | grep -v $$ | grep -v grep >/dev/null; then
+    if command ps ax | grep "$me" | grep -v $$ | grep -v grep >/dev/null; then
         echo "Already running... exiting"
         exit
     fi
 fi
 
-if [ "${API_KEY}" = "" ] && [ "${JIRA_USERNAME}" = "" ]; then
+if [ "$API_KEY" = "" ] && [ "$JIRA_USERNAME" = "" ]; then
     exit_with_message "API_KEY is missing"
 fi
 
-if [ "${BASE_URL}" = "" ]; then
+if [ "$BASE_URL" = "" ]; then
     exit_with_message "BASE_URL is missing, should be \n - 'https://golive.apwide.net/api' for cloud\n - 'https://my.jira.local/jira/rest/apwide/tem/1.1' for server/DC"
 fi
 
-if [ "${JIRA_USERNAME}" != "" ] && [ "${JIRA_PASSWORD}" = '' ]; then
-    exit_with_message "Missing JIRA_PASSWORD for user ${JIRA_USERNAME}."
+if [ "$JIRA_USERNAME" != "" ] && [ "$JIRA_PASSWORD" = '' ]; then
+    exit_with_message "Missing JIRA_PASSWORD for user $JIRA_USERNAME."
 fi
 
-if [ "${JIRA_USERNAME}" != "" ] && [ "${JIRA_PASSWORD}" != "" ]; then
-    auth_header="Authorization: Basic $(echo -n "${JIRA_USERNAME}:${JIRA_PASSWORD}" | base64)"
+if [ "$JIRA_USERNAME" != "" ] && [ "$JIRA_PASSWORD" != "" ]; then
+    auth_header="Authorization: Basic $(printf '%s:%s' "$JIRA_USERNAME" "$JIRA_PASSWORD" | base64)"
 fi
 
 function check_if_up {
@@ -111,11 +111,11 @@ function check_if_up {
 
     if [ $response_code -eq 0 ]; then
         # domain not found
-        echo $STATUS_DOWN
+        echo "$STATUS_DOWN"
     elif [ $response_code -lt 400 ]; then
-        echo $STATUS_UP
+        echo "$STATUS_UP"
     else
-        echo $STATUS_DOWN
+        echo "$STATUS_DOWN"
     fi
 }
 
@@ -125,41 +125,40 @@ function update_status {
     local response_code
     typeset -i response_code
 
-    echo -n "Updating envId ${env_id} to ${new_status}... "
+    printf 'Updating envId %d to %s... ' "$env_id" "$new_status"
 
-    if [ "${DRY_RUN}" = "true" ]; then
-        echo "not done (DRY_RUN is true)"
+    if [ "$DRY_RUN" = "true" ]; then
+         printf "not done (DRY_RUN is true)\n"
     else
-
         response_code=$(
-            curl -sL \
+            curl -s \
                 -X PUT \
                 -w "%{http_code}\\n" \
-                -H "${auth_header}" \
+                -H "$auth_header" \
                 -H "Content-type: application/json" \
                 -H "Accept: application/json" \
                 -d "{ \"name\": \"$new_status\" }" \
                 -o /dev/null \
-                "${BASE_URL}/status-change?environmentId=${env_id}"
+                "$BASE_URL/status-change?environmentId=$env_id"
         )
         if [ $response_code = 304 ]; then
-            echo "change was not needed (?)"
+            printf "change was not needed (?)\n"
         elif [ $response_code = 200 ]; then
-            echo "done"
+            printf "done\n"
         else
-            echo "change was refused ($response_code)."
+            printf 'change was refused (%s)\n' "$response_code"
         fi
     fi
 }
 
 function is_ignored_status {
-    if [ "${IGNORED_STATUSES}" = "" ]; then
+    if [ "$IGNORED_STATUSES" = "" ]; then
         return 1
     else
         local status=$1
         local list
         local i
-        list=$(echo $IGNORED_STATUSES | tr ',' ' ')
+        list=$(echo "$IGNORED_STATUSES" | tr ',' ' ')
         for i in $list; do
             if [ "$i" = "$status" ]; then
                 return 0
@@ -176,21 +175,21 @@ fi
 
 # Retrieve all environments
 envs="$(mktemp)"
-curl -sL -H "${auth_header}" "${BASE_URL}/environments/search/paginated?${GOLIVE_QUERY}&_expand=${expand}" >"${envs}"
+curl -s -H "${auth_header}" "$BASE_URL/environments/search/paginated?$GOLIVE_QUERY&_expand=$expand" >"$envs"
 
-if [ "$(cat "$envs")" = "" ]; then
+if [ "$(cat "$envs")" = "" ] || ! jq < "$envs" > /dev/null 2>&1; then
     rm "$envs"
     exit_with_message "The provided host and/or key does not work properly. Please check your entries."
 fi
 
-if [ "${DRY_RUN}" = "true" ]; then
+if [ "$DRY_RUN" = "true" ]; then
     echo "IMPORTANT: Running in read-only mode. Statuses will not be updated in Golive."
 fi
 
 typeset -i count
-count=$(cat "$envs" | jq '.environments | length')
+count=$(jq < "$envs" '.environments | length')
 if [ $count -gt 1 ]; then
-    echo "There are ${count} environments in Golive"
+    printf "There are %s environments in Golive\n" "${count}"
 fi
 
 if [ $count -eq 0 ]; then
@@ -201,29 +200,32 @@ fi
 
 index=0
 until [ $index -gt $count ]; do
-    id="$(cat "$envs" | jq --argjson index $index '.environments[$index].id')"
-    name="$(cat "$envs" | jq --argjson index $index '.environments[$index].name')"
-    current_status="$(cat "$envs" | jq -r --argjson index $index '.environments[$index].status.name')"
+    id="$(jq < "$envs" -r --argjson index $index '.environments[$index].id')"
+    name="$(jq < "$envs" -r --argjson index $index '.environments[$index].name')"
+    current_status="$(jq < "$envs" -r --argjson index $index '.environments[$index].status.name')"
 
-    if [ "${current_status}" = "null" ]; then
+    if [ "$current_status" = "null" ]; then
         current_status=None
     fi
 
     if is_ignored_status "$current_status"; then
-        echo "Ignoring $name as its status is ${current_status}"
+        printf 'Ignoring %s as its status is %s\n' "$name" "$current_status"
     else
         if [ "$URL_TO_CHECK" = "" ]; then
-            url="$(cat "$envs" | jq -r --argjson index $index '.environments[$index].url')"
+            url="$(jq < "$envs" -r --argjson index $index '.environments[$index].url')"
         else
-            url="$(cat "$envs" | jq -r --argjson index $index --arg attr $URL_TO_CHECK '.environments[$index].attributes[$attr]')"
+            url="$(jq < "$envs" -r --argjson index $index --arg attr "$URL_TO_CHECK" '.environments[$index].attributes[$attr]')"
         fi
         if [ "$url" = '' ] || [ "$url" = 'null' ]; then
-            echo "$name has no url"
+            printf '%s (%d) has no url\n' "$name" "$id"
         else
-            echo "Testing $name on $url"
+            printf 'Testing %s (%d) on %s...' "$name" "$id" "$url"
             new_status=$(check_if_up "$url")
             if [ "$current_status" != "$new_status" ]; then
+                printf ' now "%s"\n' "$new_status"
                 update_status "$id" "$new_status"
+            else
+                printf ' still "%s"\n' "$new_status"
             fi
         fi
     fi

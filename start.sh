@@ -19,17 +19,17 @@ cat <<END
  #/      #########################/
 END
 
-/app/cron.sh
+if ! /app/cron.sh; then
+    exit 1
+fi
 
-if [ $PERIOD -eq 0 ]; then
+if [ "$PERIOD" -eq 0 ]; then
     exit
 fi
 
 printf "\n\nInstalling cron schedule..."
 
-crontab -l | { cat; echo "* * * * * bash /app/cron.sh"; } | crontab -
-
-if [ $? = 0 ]; then
+if crontab -l | { cat; echo "* * * * * bash /app/cron.sh"; } | crontab -; then
     printf " done\n"
 else
     printf " failed to install\n"

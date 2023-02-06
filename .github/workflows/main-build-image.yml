@@ -21,7 +21,8 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push
+      - id: build
+        name: Build and push
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -34,4 +35,9 @@ jobs:
             method: 'PUT'
             bearerToken: ${{ secrets.GOLIVE_TOKEN }}
             customHeaders: '{"Content-Type": "application/json"}'
-            data: '{ "versionName": "${{ env.today }}-${{ steps.commit.outputs.short }}", "description": "Github Workflow automated release" }'
+            data: '{
+                "versionName": "${{ env.today }}-${{ steps.commit.outputs.short }}",
+                "description": "Github Workflow automated release\n\n
+                    ➙ https://hub.docker.com/repository/docker/apwide/golive-monitor/general\n\n
+                    ➙ https://github.com/apwide/golive-monitor/commit/${{steps.commit.outputs.short}}"
+            }'

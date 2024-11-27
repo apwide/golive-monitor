@@ -13,6 +13,8 @@
 
 auth_header="Authorization: bearer ${API_KEY}"
 
+SEARCH_PATH=/environments/search/paginated
+
 function help_debug {
     cat <<END
 To function properly this script requires some parameters passed as environment variables
@@ -42,7 +44,7 @@ The following are optional and their value depends on the configuration in Goliv
 
 *Common pitfalls*
 
-API_KEY of the JIRA credentials are wrong. Double check that the provided values are correct.
+API_KEY or the JIRA credentials are wrong. Double check that the provided values are correct.
 
 On server/DC, wrong password might result in the user being eligible for CAPTCHA if there were to many failures,
 reset it in Jira's user management page before continuing with this script.
@@ -51,6 +53,9 @@ If fetching the environments works but the script cannot update statuses, it mig
 This script uses the permissions of the user for each environment based on the assigned permission scheme
 Check the permission of the user which was used to generate the API_KEY (or the user defined in JIRA_USERNAME before
 server/DC).
+
+The machine running this script must also be able to talk to Golive. For Cloud, it means golive.apwide.net must be reachable.
+
 END
 }
 
@@ -94,6 +99,18 @@ fi
 
 if [ "$JIRA_USERNAME" != "" ] && [ "$JIRA_PASSWORD" != "" ]; then
     auth_header="Authorization: Basic $(printf '%s:%s' "$JIRA_USERNAME" "$JIRA_PASSWORD" | base64)"
+fi
+
+# Handle the case of Golive not reachable
+if ! curl "$BASE_URL" > /dev/null 2>/dev/null; then
+    exit_with_message "$BASE_URL is not reachable from this host"
+fi
+
+# Handle the case the not 200 case
+code=$(curl -o /dev/null -s -w "%{http_code}" -H "${auth_header}" "$BASE_URL$SEARCH_PATH?_limit=1")
+
+if [ "$code" != "200" ]; then
+    exit_with_message "API_KEY or JIRA_USERNAME/JIRA_PASSWORD do not work, server return $code"
 fi
 
 function check_if_up {
@@ -175,7 +192,7 @@ fi
 
 # Retrieve all environments
 envs="$(mktemp)"
-curl -s -H "${auth_header}" "$BASE_URL/environments/search/paginated?$GOLIVE_QUERY&_expand=$expand" >"$envs"
+curl -s -H "${auth_header}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" >"$envs"
 
 if [ "$(cat "$envs")" = "" ] || ! jq < "$envs" > /dev/null 2>&1; then
     rm "$envs"

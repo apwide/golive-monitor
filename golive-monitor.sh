@@ -189,14 +189,26 @@ expand=false
 if [ "$URL_TO_CHECK" != "" ]; then
     expand=true
 fi
+if test "$READ_ONLY" = "true"; then
+    echo "Runing in read only to check the server response."
+    echo "We will query the server and send the output through jq:"
+    curl -s -H "${auth_header}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" | jq
+    echo "if the above text is a JSON object, you can probably remove the READ_ONLY variable by removing it from the .env file AND remove it from the running shell."
+    exit
+fi
+
 
 # Retrieve all environments
 envs="$(mktemp)"
-curl -s -H "${auth_header}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" >"$envs"
+curl -s -H "${auth_header}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" > "$envs"
 
-if [ "$(cat "$envs")" = "" ] || ! jq < "$envs" > /dev/null 2>&1; then
-    rm "$envs"
-    exit_with_message "The provided host and/or key does not work properly. Please check your entries."
+if test ! -s "$envs" || test "$(jq < "$envs" -r type)" != "object"; then
+    exit_with_message "Your golive credentials are good, but the server returned something weird.\n \
+        - the url used: \"$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand\" \n \
+        - the returned content \"$(cat "$envs")\" \n \
+        - this content is stored in this file \"$envs\" \n \
+        the content should be a JSON object."
+
 fi
 
 if [ "$DRY_RUN" = "true" ]; then

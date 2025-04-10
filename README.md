@@ -20,7 +20,7 @@ We provide 2 ways of using this script:
 To run/test locally:
 
 ```shell
-export $(cat .env.server .env.server.local | grep -v "^#" | xargs) && ./golive-monitor.sh
+env $(cat .env.server .env.server.local | grep -v "^#" | xargs) ./golive-monitor.sh
 ```
 
 ## Docker image

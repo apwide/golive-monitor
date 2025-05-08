@@ -6,7 +6,7 @@ This script performs the following operations:
 -   tests the availability of each environment (using `url` or using the environment value associated with an attribute name provided)
 -   perform status-change of each environment that has changed status (use DRY_RUN=true to avoid)
 
-See the `help_debug` function for help configuration this script.
+Use READ_ONLY=true to test without updating anything on Golive.
 
 # Usage
 
@@ -72,8 +72,23 @@ In this configuration, if the previous execution is still running, the new run i
 -   IGNORED_STATUSES (optional) -- comma separated list of status. If the environment has this status, it will not be checked
 -   DRY_RUN (optional) -- set to `true` to not update the status after the test
 -   PERIOD (default to 1) -- amount of minutes between to run when using the docker image as cron, cannot be smaller than one
+-   READ_ONLY=true -- stops after fetching the environments from Golive (perfect to troublehoot your configuration)
 
 ### Examples
+
+Simplest Cloud example
+
+```
+API_KEY=xxx
+```
+
+Simplest DataCenter example
+
+```
+JIRA_USERNAME=bob
+JIRA_PASSWORD=passwordOfBob
+BASE_HREF=https://my.jira.instance.com/rest/apwide/tem/1.1
+```
 
 Cloud setup and filtering on category `Dev` and application `Payment`.
 
@@ -108,3 +123,4 @@ IGNORED_STATUSES=Maintenance,None
 URL_TO_CHECK=heartbeat
 DRY_RUN=true
 ```
+

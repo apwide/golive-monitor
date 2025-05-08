@@ -10,8 +10,7 @@
 : "${JIRA_PASSWORD:=}"
 : "${READ_ONLY:=}"
 : "${IGNORED_STATUSES:=}"
-
-auth_header="Authorization: bearer ${API_KEY}"
+: "${USER_AGENT:=GoliveMonitor}"
 
 SEARCH_PATH=/environments/search/paginated
 
@@ -85,32 +84,50 @@ else
     fi
 fi
 
-if [ "$API_KEY" = "" ] && [ "$JIRA_USERNAME" = "" ]; then
-    exit_with_message "API_KEY is missing"
-fi
-
-if [ "$BASE_URL" = "" ]; then
+if test -z "$BASE_URL"; then
     exit_with_message "BASE_URL is missing, should be \n - 'https://golive.apwide.net/api' for cloud\n - 'https://my.jira.local/jira/rest/apwide/tem/1.1' for server/DC"
 fi
 
-if [ "$JIRA_USERNAME" != "" ] && [ "$JIRA_PASSWORD" = '' ]; then
+if test -z "$API_KEY" && test -z "$JIRA_USERNAME"; then
+    exit_with_message "API_KEY is missing"
+fi
+
+if test "$JIRA_USERNAME" && test -z "$JIRA_PASSWORD"; then
     exit_with_message "Missing JIRA_PASSWORD for user $JIRA_USERNAME."
 fi
 
-if [ "$JIRA_USERNAME" != "" ] && [ "$JIRA_PASSWORD" != "" ]; then
-    auth_header="Authorization: Basic $(printf '%s:%s' "$JIRA_USERNAME" "$JIRA_PASSWORD" | base64)"
+declare -a curl_params
+
+if test "$JIRA_USERNAME" && test "$JIRA_PASSWORD"; then
+    curl_params+=(-H "Authorization: Basic $(printf '%s:%s' "$JIRA_USERNAME" "$JIRA_PASSWORD" | base64)")
+else
+    curl_params+=(-H "Authorization: bearer $API_KEY")
+fi
+
+curl_params+=(--user-agent "Golive Monitor")
+
+if test -n "$API_KEY" && test -z "$JIRA_USERNAME"; then
+    IFS='.' read -ra token_split <<< "$API_KEY"
+    golive_key=$(echo "${token_split[1]}" | base64 -d | jq -r '.goliveKey')
+    user_account_id=$(echo "${token_split[1]}" | base64 -d | jq -r '.userAccountId')
+    if test -n "$golive_key"; then
+        curl_params+=(-H "X-Apw-Golive-Key: $golive_key")
+    fi
+    if test -n "$user_account_id"; then
+        curl_params+=(-H "X-Apw-Account-Id: $user_account_id")
+    fi
 fi
 
 # Handle the case of Golive not reachable
-if ! curl "$BASE_URL" > /dev/null 2>/dev/null; then
+if ! curl "${curl_params[@]}" "$BASE_URL" > /dev/null 2>/dev/null; then
     exit_with_message "$BASE_URL is not reachable from this host"
 fi
 
-# Handle the case the not 200 case
-code=$(curl -o /dev/null -s -w "%{http_code}" -H "${auth_header}" "$BASE_URL$SEARCH_PATH?_limit=1")
+# Handle the not 200 case
+code=$(curl -s -o /dev/null -w '%{http_code}' "${curl_params[@]}" "$BASE_URL$SEARCH_PATH?_limit=1")
 
 if [ "$code" != "200" ]; then
-    exit_with_message "API_KEY or JIRA_USERNAME/JIRA_PASSWORD do not work, server return $code"
+    exit_with_message "API_KEY or JIRA_USERNAME/JIRA_PASSWORD do not work, server returned $code"
 fi
 
 function check_if_up {
@@ -120,6 +137,7 @@ function check_if_up {
     response_code=$(
         curl \
             -sL \
+            --user-agent "$USER_AGENT" \
             --connect-timeout 5 \
             -w "%{http_code}\\n" \
             "${url}" \
@@ -151,7 +169,7 @@ function update_status {
             curl -s \
                 -X PUT \
                 -w "%{http_code}\\n" \
-                -H "$auth_header" \
+                "${curl_params[@]}" \
                 -H "Content-type: application/json" \
                 -H "Accept: application/json" \
                 -d "{ \"name\": \"$new_status\" }" \
@@ -191,8 +209,11 @@ if [ "$URL_TO_CHECK" != "" ]; then
 fi
 if test "$READ_ONLY" = "true"; then
     echo "Runing in read only to check the server response."
+    echo "setup:"
+    echo " ➙ url: $BASE_URL ($SEARCH_PATH)"
+    echo " ➙ query: \"$GOLIVE_QUERY\" (can be empty)"
     echo "We will query the server and send the output through jq:"
-    curl -s -H "${auth_header}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" | jq
+    curl -s "${curl_params[@]}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" | jq
     echo "if the above text is a JSON object, you can probably remove the READ_ONLY variable by removing it from the .env file AND remove it from the running shell."
     exit
 fi
@@ -200,7 +221,7 @@ fi
 
 # Retrieve all environments
 envs="$(mktemp)"
-curl -s -H "${auth_header}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" > "$envs"
+curl -s "${curl_params[@]}" "$BASE_URL$SEARCH_PATH?$GOLIVE_QUERY&_expand=$expand" > "$envs"
 
 if test ! -s "$envs" || test "$(jq < "$envs" -r type)" != "object"; then
     exit_with_message "Your golive credentials are good, but the server returned something weird.\n \

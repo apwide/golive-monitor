@@ -3,7 +3,7 @@
 This script performs the following operations:
 
 -   fetches environments from [Golive](https://marketplace.atlassian.com/apps/1212239/?tab=overview&hosting=cloud) (server or cloud)
--   tests the availability of each environment (using `url` or using the environment value associated with an attribute name provided)
+-   tests the availability of each environment (default via HTTP against `url` or an attribute, or via ICMP ping when using the `USE_PING=true` environment variable)
 -   perform status-change of each environment that has changed status (use DRY_RUN=true to avoid)
 
 Use READ_ONLY=true to test without updating anything on Golive.
@@ -58,6 +58,25 @@ $ docker run -ti --env-file=.env.server.local apwide/golive-monitor
 ```
 
 In this configuration, if the previous execution is still running, the new run is postponed until the next minute.
+
+## Ping vs HTTP modes
+
+- HTTP (default): the script performs an HTTP request to the environment URL (or to the value of the attribute named by `URL_TO_CHECK`) and considers it Up when the HTTP status code is < 400.
+- Ping (set `USE_PING=true`): the script extracts the host from the environment URL/attribute (URL, domain or IP) and sends a single ICMP echo (`ping -c 1`). If the command succeeds, the environment is considered Up; otherwise Down. This applies to all environments for the run.
+
+Run with ping mode:
+
+```shell
+USE_PING=true ./golive-monitor.sh
+```
+
+Run with default HTTP mode:
+
+```shell
+./golive-monitor.sh
+```
+
+When used as a Docker image, set the env variable in the `.env` file.
 
 ## Configuration
 

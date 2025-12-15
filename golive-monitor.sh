@@ -11,6 +11,9 @@
 : "${READ_ONLY:=}"
 : "${IGNORED_STATUSES:=}"
 : "${USER_AGENT:=GoliveMonitor}"
+: "${USE_PING:=}"
+
+auth_header="Authorization: bearer ${API_KEY}"
 
 SEARCH_PATH=/environments/search/paginated
 
@@ -40,6 +43,7 @@ The following are optional and their value depends on the configuration in Goliv
                  environment attribute and pass it to this script
 - IGNORED_STATUSES - comma separated list of statuses. If an environment is in that status, the check will
                      not be performed. Values are not trimmed so be careful (ex. "Maintenance,None")
+- USE_PING - set to 'true' to ping the host instead of doing an HTTP check (applies to all environments), IGNORED_STATUSES is ignored in ping mode
 
 *Common pitfalls*
 
@@ -67,6 +71,9 @@ function exit_with_message {
 # Requirements
 which jq >/dev/null 2>&1 || exit_with_message "jq is missing"
 which curl >/dev/null 2>&1 || exit_with_message "curl is missing"
+if [ "$USE_PING" = true ]; then
+    which ping >/dev/null 2>&1 || exit_with_message "ping is missing"
+fi
 
 # Only one of me can run
 me=$(basename "${BASH_SOURCE[0]}")
@@ -148,6 +155,43 @@ function check_if_up {
         # domain not found
         echo "$STATUS_DOWN"
     elif [ $response_code -lt 400 ]; then
+        echo "$STATUS_UP"
+    else
+        echo "$STATUS_DOWN"
+    fi
+}
+
+# Extract a host (domain or IP) from an input that can be:
+# - a domain (e.g., example.org)
+# - an IP (e.g., 10.0.0.1)
+# - a URL (e.g., https://example.org:8443/path?q=1)
+function extract_host() {
+    local input=$1
+    local host
+    # If it looks like a URL (has scheme://), strip scheme and take up to first '/'
+    if [[ "$input" =~ ^[a-zA-Z][a-zA-Z0-9+.-]*:// ]]; then
+        host=${input#*://}
+        host=${host%%/*}
+    else
+        host=$input
+    fi
+    # Remove optional port if present (host:port)
+    host=${host%%:*}
+    echo "$host"
+}
+
+# Ping-based availability check mirroring check_if_up behavior
+# Returns STATUS_UP when the host replies to a single ICMP echo request, otherwise STATUS_DOWN
+function check_if_up_ping() {
+    local target=$1
+    local host
+    host=$(extract_host "$target")
+    if [ -z "$host" ] || [ "$host" = "null" ]; then
+        echo "$STATUS_DOWN"
+        return
+    fi
+    # Send a single ping and rely on the return code
+    if ping -c 1 -W 3 "$host" >/dev/null 2>&1; then
         echo "$STATUS_UP"
     else
         echo "$STATUS_DOWN"
@@ -269,8 +313,14 @@ until [ $index -gt $count ]; do
         if [ "$url" = '' ] || [ "$url" = 'null' ]; then
             printf '%s (%d) has no url\n' "$name" "$id"
         else
-            printf 'Testing %s (%d) on %s...' "$name" "$id" "$url"
-            new_status=$(check_if_up "$url")
+            if [ "$USE_PING" = "true" ]; then
+                host_to_ping=$(extract_host "$url")
+                printf 'Pinging %s (%d) host %s (from %s)...' "$name" "$id" "$host_to_ping" "$url"
+                new_status=$(check_if_up_ping "$url")
+            else
+                printf 'Testing %s (%d) via HTTP on %s...' "$name" "$id" "$url"
+                new_status=$(check_if_up "$url")
+            fi
             if [ "$current_status" != "$new_status" ]; then
                 printf ' now "%s"\n' "$new_status"
                 update_status "$id" "$new_status"

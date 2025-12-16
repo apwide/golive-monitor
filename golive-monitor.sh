@@ -13,8 +13,6 @@
 : "${USER_AGENT:=GoliveMonitor}"
 : "${USE_PING:=}"
 
-auth_header="Authorization: bearer ${API_KEY}"
-
 SEARCH_PATH=/environments/search/paginated
 
 function help_debug {

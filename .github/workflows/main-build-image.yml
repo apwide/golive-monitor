@@ -27,6 +27,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
+          pull: true
           push: true
           tags: apwide/golive-monitor:latest,apwide/golive-monitor:${{ env.today }}-${{ steps.commit.outputs.short }}
       - name: Push new deployment to Golive

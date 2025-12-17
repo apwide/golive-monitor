@@ -1,3 +1,5 @@
 .*.local
 .idea/
 .env
+.env.*
+!.env.example

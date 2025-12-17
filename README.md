@@ -17,10 +17,22 @@ We provide 2 ways of using this script:
 
 ## Script
 
+### Setup
+
+First, copy the example environment file and configure it for your setup:
+
+```shell
+cp .env.example .env
+```
+
+Then edit `.env` with your specific configuration values (see Configuration section below).
+
+### Run locally
+
 To run/test locally:
 
 ```shell
-env $(cat .env.server .env.server.local | grep -v "^#" | xargs) ./golive-monitor.sh
+env $(cat .env | grep -v "^#" | xargs) ./golive-monitor.sh
 ```
 
 ## Docker image
@@ -37,13 +49,13 @@ $ docker build -t apwide/golive-monitor .
 To run it once:
 
 ```shell
-$ docker run -ti --env-file=.env.server.local apwide/golive-monitor ./golive-monitor.sh
+$ docker run -ti --env-file=.env apwide/golive-monitor ./golive-monitor.sh
 ```
 
 OR just set `PERIOD=0` and run without the command
 
 ```shell
-$ docker run -ti --env-file=.env.server.local apwide/golive-monitor
+$ docker run -ti --env-file=.env apwide/golive-monitor
 ```
 
 When testing this image localy, remember that running container usualy cannot access `localhost`, make `BASE_URL` points to an IP or a resolvable machine name.
@@ -54,7 +66,7 @@ When testing this image localy, remember that running container usualy cannot ac
 Define a value in minutes for `PERIOD` environment variable.
 
 ```shell
-$ docker run -ti --env-file=.env.server.local apwide/golive-monitor
+$ docker run -ti --env-file=.env apwide/golive-monitor
 ```
 
 In this configuration, if the previous execution is still running, the new run is postponed until the next minute.
@@ -80,63 +92,107 @@ When used as a Docker image, set the env variable in the `.env` file.
 
 ## Configuration
 
--   JIRA_USERNAME (only server/DC)
--   JIRA_PASSWORD (only server/DC)
--   BASE_URL (only server/DC)
--   API_KEY (only cloud)
--   STATUS_UP (default: 'Up') -- status value in golive for an environment to be seen as UP
--   STATUS_DOWN (default: 'Down) -- status value in golive for an environment to be seen as DOWN
--   GOLIVE_QUERY (optional) -- query string to filter the environment search
--   URL_TO_CHECK (optional) -- attribute value to look for a test url, if not provided the environment url is used
--   IGNORED_STATUSES (optional) -- comma separated list of status. If the environment has this status, it will not be checked
--   DRY_RUN (optional) -- set to `true` to not update the status after the test
--   PERIOD (default to 1) -- amount of minutes between to run when using the docker image as cron, cannot be smaller than one
--   READ_ONLY=true -- stops after fetching the environments from Golive (perfect to troublehoot your configuration)
+Copy `.env.example` to `.env` and configure the appropriate variables for your setup:
+
+### Cloud Configuration
+-   **API_KEY** (required) -- Generate it in the Golive integrations page
+
+### Server/DC Configuration
+-   **JIRA_USERNAME** (required) -- Your Jira username
+-   **JIRA_PASSWORD** (required) -- Your Jira password
+-   **BASE_URL** (required) -- Jira REST API base URL (e.g., http://localhost:2990/jira/rest/apwide/tem/1.1)
+
+### Optional Settings (both cloud and server)
+-   **STATUS_UP** (default: 'Up') -- status value in golive for an environment to be seen as UP
+-   **STATUS_DOWN** (default: 'Down') -- status value in golive for an environment to be seen as DOWN
+-   **GOLIVE_QUERY** (optional) -- query string to filter the environment search
+-   **URL_TO_CHECK** (optional) -- attribute value to look for a test url, if not provided the environment url is used
+-   **IGNORED_STATUSES** (optional) -- comma separated list of status. If the environment has this status, it will not be checked
+-   **DRY_RUN** (optional) -- set to `true` to not update the status after the test
+-   **PERIOD** (default to 1) -- amount of minutes between runs when using the docker image as cron, cannot be smaller than one
+-   **READ_ONLY** (optional) -- set to `true` to stop after fetching the environments from Golive (perfect to troubleshoot your configuration)
+-   **USE_PING** (optional) -- runs ping test instead of HTTP
 
 ### Examples
 
-Simplest Cloud example
-
-```
-API_KEY=xxx
-```
-
-Simplest DataCenter example
-
-```
-JIRA_USERNAME=bob
-JIRA_PASSWORD=passwordOfBob
-BASE_HREF=https://my.jira.instance.com/rest/apwide/tem/1.1
-```
-
-Cloud setup and filtering on category `Dev` and application `Payment`.
+#### Cloud Setup
+For Atlassian Cloud, configure only the cloud section in your `.env` file:
 
 ```shell
-API_KEY=xxx
+# =============================================================================
+# CLOUD CONFIGURATION
+# =============================================================================
+
+# Generate it in the Golive integrations page
+API_KEY=your_api_key_here
+
+# Optional settings can be added below
+# DRY_RUN=true
+# GOLIVE_QUERY=categoryName=Dev
+```
+
+#### Server/DC Setup
+For Jira Server or Data Center, configure only the server section in your `.env` file:
+
+```shell
+# =============================================================================
+# SERVER CONFIGURATION
+# =============================================================================
+
+JIRA_USERNAME=admin
+JIRA_PASSWORD=admin
+BASE_URL=http://localhost:2990/jira/rest/apwide/tem/1.1
+
+# remove or assign another value to enable status-changes
+DRY_RUN=true
+```
+
+#### Advanced Cloud Configuration Examples
+
+Cloud setup with filtering on category `Dev` and application `Payment`:
+
+```shell
+# =============================================================================
+# CLOUD CONFIGURATION
+# =============================================================================
+
+API_KEY=your_api_key_here
 GOLIVE_QUERY=categoryName=Dev&application=Payment
 ```
 
-Same but ignoring environments that has status set to None or Maintenance
+With ignored statuses (environments with status 'None' or 'Maintenance' won't be checked):
 
 ```shell
-API_KEY=xxx
+# =============================================================================
+# CLOUD CONFIGURATION
+# =============================================================================
+
+API_KEY=your_api_key_here
 GOLIVE_QUERY=categoryName=Dev&application=Payment
 IGNORED_STATUSES=Maintenance,None
 ```
 
-Same but using an environment attribute named `heartbeat` to check instead of the url
+Using a custom environment attribute named `heartbeat` for health checks:
 
 ```shell
-API_KEY=xxx
+# =============================================================================
+# CLOUD CONFIGURATION
+# =============================================================================
+
+API_KEY=your_api_key_here
 GOLIVE_QUERY=categoryName=Dev&application=Payment
 IGNORED_STATUSES=Maintenance,None
 URL_TO_CHECK=heartbeat
 ```
 
-Same but disallow the script to update the statuses (useful to test the setup)
+Dry run mode (test configuration without updating statuses):
 
 ```shell
-API_KEY=xxx
+# =============================================================================
+# CLOUD CONFIGURATION
+# =============================================================================
+
+API_KEY=your_api_key_here
 GOLIVE_QUERY=categoryName=Dev&application=Payment
 IGNORED_STATUSES=Maintenance,None
 URL_TO_CHECK=heartbeat
